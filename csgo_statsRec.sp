@@ -58,22 +58,16 @@ public void OnPluginStart()
 	//HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_Post);
 	//HookEvent("weapon_fire", Event_WeaponFire, EventHookMode_Post);
 	
-	InitializeDB();
-	
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if(IsClientConnected(i))
-		{
-			if(!IsFakeClient(i))
-				OnClientPutInServer(i);
-		}
-			
-	}
-		
+	InitializeDB();	
 }
 
 public void OnClientPutInServer(int client)
 {
+	if(IsFakeClient(client))
+	{
+		return;
+	}
+	
 	if(g_DB == null)
 	{
 		PrintToServer("OnClientPutInServer DB not connected");
@@ -101,6 +95,7 @@ public void OnClientPutInServer(int client)
 		return;
 	}
 	
+	PrintToServer("OnClientPutInServer");
 	PrintToServer("SteamID: %s", sSteamID); // Just for debug purposes
 	
 	// Escaping name to fit DB
