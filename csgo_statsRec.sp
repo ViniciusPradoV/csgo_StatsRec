@@ -34,6 +34,10 @@ int g_iPlayerAccuracy[MAXPLAYERS + 1] = 0;
 int g_iPlayerAssists[MAXPLAYERS + 1] = 0;
 int g_iTimePlayed[MAXPLAYERS + 1] = 0;
 
+// ConVars //
+
+ConVar g_cvPluginEnabled;
+
 public Plugin myinfo = 
 {
 	name = "[CS:GO] StatsRec",
@@ -51,6 +55,17 @@ public void OnPluginStart()
 		SetFailState("This plugin is for CSGO/CSS only.");	
 	}
 	
+	// ConVars //
+	
+	CreateConVar("csgo_statsrec_version", PLUGIN_VERSION, "[CS:GO] StatsRec");
+	g_cvPluginEnabled = CreateConVar("csgo_statsrec_enabled", "1", "Controls if plugin is enabled");
+	
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
+	
 	// Event Hooks //
 	
 	HookEvent("player_death", PlayerDeath_Callback, EventHookMode_Post);
@@ -59,10 +74,17 @@ public void OnPluginStart()
 	//HookEvent("weapon_fire", Event_WeaponFire, EventHookMode_Post);
 	
 	InitializeDB();	
+	
+	AutoExecConfig(true, "csgo_statsrec");
 }
 
 public void OnClientPutInServer(int client)
 {
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
 	if(IsFakeClient(client))
 	{
 		return;
@@ -113,6 +135,11 @@ public void OnClientPutInServer(int client)
 
 void InitializeDB()
 {
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
 	char error[MAX_ERROR_LENGTH];
 	if (SQL_CheckConfig("statsrec"))
 	{
@@ -142,6 +169,10 @@ void InitializeDB()
 
 public void SQL_InsertPlayerCallback(Database db, DBResultSet results, const char[] error, any data)
 {
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
 	
 	if(results == null)
 	{
@@ -172,6 +203,11 @@ public void SQL_InsertPlayerCallback(Database db, DBResultSet results, const cha
 
 public void SQL_SelectPlayerCallback(Database db, DBResultSet results, const char[] error, any data)
 {
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
 	if(results == null)
 	{
 		LogError("[SR] Client data fetch failed. Reason: %s", error);
@@ -190,6 +226,11 @@ public void SQL_SelectPlayerCallback(Database db, DBResultSet results, const cha
 
 public void PlayerDeath_Callback(Event e, const char[] name, bool dontBroadcast)
 {
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
 	if (g_DB == null)
 	{
 		return;
@@ -233,6 +274,11 @@ void UpdatePlayer(int client)
 
 public void SQL_UpdatePlayerCallback(Database db, DBResultSet results, const char[] error, any data)
 {
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
 	if (results == null)
 	{
 		LogError("[SR] UpdatePlayerCallback cant use client data. Reason: %s", error);
@@ -242,6 +288,11 @@ public void SQL_UpdatePlayerCallback(Database db, DBResultSet results, const cha
 
 public void SQL_UpdatePlayerLastConnectionCallback(Database db, DBResultSet results, const char[] error, any data)
 {
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
 	if (results == null)
 	{
 		LogError("[SR] UpdatePlayerLastConnectionCallback cant use client data. Reason: %s", error);
@@ -251,6 +302,11 @@ public void SQL_UpdatePlayerLastConnectionCallback(Database db, DBResultSet resu
 
 public void RoundEnd_Callback(Event e, const char[] name, bool dontBroadcast)
 {
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
 	if (g_DB == null)
 	{
 		return;
@@ -268,6 +324,11 @@ public void RoundEnd_Callback(Event e, const char[] name, bool dontBroadcast)
 
 public void OnClientDisconnect(int client)
 {
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
 	if (IsFakeClient(client))
 	{
 		return;
