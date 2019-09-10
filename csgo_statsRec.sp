@@ -60,11 +60,6 @@ public void OnPluginStart()
 	CreateConVar("csgo_statsrec_version", PLUGIN_VERSION, "[CS:GO] StatsRec");
 	g_cvPluginEnabled = CreateConVar("csgo_statsrec_enabled", "1", "Controls if plugin is enabled");
 	
-	if(!g_cvPluginEnabled.BoolValue)
-	{
-		return;
-	}
-	
 	
 	// Event Hooks //
 	
