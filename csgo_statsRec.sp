@@ -16,6 +16,7 @@
 #define STAT_SHOTS 		3
 #define STAT_HITS 		4
 #define STAT_ASSISTS 	5
+#define STAT_TIMEPLAYED	6
 
 
 #include <sourcemod>
@@ -23,8 +24,8 @@
 
 #pragma newdecls required
 
-										/* TODO */
-/* Add column for timeplayed on DB and creating a menu to see player stats */
+															/* TODO */
+	/* Create a menu to see player stats, create a function to convert time on seconds on DB to HH:MM:SS for display on the menu*/
 
 EngineVersion g_Game;
 
@@ -81,6 +82,53 @@ public void OnPluginStart()
 	AutoExecConfig(true, "csgo_statsrec");
 }
 
+void InitializeDB()
+{
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
+	char error[MAX_ERROR_LENGTH];
+	if (SQL_CheckConfig("statsrec"))
+	{
+		g_DB = SQL_Connect("statsrec", true, error, sizeof(error));
+		
+		if (g_DB == null || g_DB == INVALID_HANDLE)
+		{
+			SetFailState("[SR] Error on start. Reason: %s", error);
+		}
+	}
+	else
+	{
+		SetFailState("[SR] Cant find `statsrec` on database.cfg");
+	}
+	
+	g_DB.SetCharset("utf8");
+	
+	char sQuery[MAX_QUERY_LENGTH];
+	PrintToServer("Before FormatEx");
+	// Concatenating separately for better readability
+	StrCat(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS `players`");
+	StrCat(sQuery, sizeof(sQuery), " (`steamid` VARCHAR(34) NOT NULL,");
+	StrCat(sQuery, sizeof(sQuery), " `name` VARCHAR(32),");
+	StrCat(sQuery, sizeof(sQuery), " `lastconn` VARCHAR(32) NOT NULL,");
+	StrCat(sQuery, sizeof(sQuery), " `kills` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `deaths` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `headshots` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `hits` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `shots` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `assists` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `timeplayed` INT(20) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " PRIMARY KEY (`steamid`))");
+	FormatEx(sQuery, sizeof(sQuery), sQuery);
+	if (!SQL_FastQuery(g_DB, sQuery))
+	{
+		SQL_GetError(g_DB, error, sizeof(error));
+		LogError("[SR] Cant create table. Error : %s", error);
+	}
+}
+
 public void OnClientPutInServer(int client)
 {
 	// Checking for Enabled CVar, if false does not execute this function
@@ -133,53 +181,6 @@ public void OnClientPutInServer(int client)
 	g_DB.Query(SQL_InsertPlayerCallback, sQuery, GetClientSerial(client), DBPrio_Normal); 
 }
 
-
-void InitializeDB()
-{
-	if(!g_cvPluginEnabled.BoolValue)
-	{
-		return;
-	}
-	
-	char error[MAX_ERROR_LENGTH];
-	if (SQL_CheckConfig("statsrec"))
-	{
-		g_DB = SQL_Connect("statsrec", true, error, sizeof(error));
-		
-		if (g_DB == null || g_DB == INVALID_HANDLE)
-		{
-			SetFailState("[SR] Error on start. Reason: %s", error);
-		}
-	}
-	else
-	{
-		SetFailState("[SR] Cant find `statsrec` on database.cfg");
-	}
-	
-	g_DB.SetCharset("utf8");
-	
-	char sQuery[MAX_QUERY_LENGTH];
-	PrintToServer("Before FormatEx");
-	// Concatenating separately for better readability
-	StrCat(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS `players`");
-	StrCat(sQuery, sizeof(sQuery), " (`steamid` VARCHAR(34) NOT NULL,");
-	StrCat(sQuery, sizeof(sQuery), " `name` VARCHAR(32),");
-	StrCat(sQuery, sizeof(sQuery), " `lastconn` VARCHAR(32) NOT NULL,");
-	StrCat(sQuery, sizeof(sQuery), " `kills` INT(11) NOT NULL DEFAULT 0,");
-	StrCat(sQuery, sizeof(sQuery), " `deaths` INT(11) NOT NULL DEFAULT 0,");
-	StrCat(sQuery, sizeof(sQuery), " `headshots` INT(11) NOT NULL DEFAULT 0,");
-	StrCat(sQuery, sizeof(sQuery), " `hits` INT(11) NOT NULL DEFAULT 0,");
-	StrCat(sQuery, sizeof(sQuery), " `shots` INT(11) NOT NULL DEFAULT 0,");
-	StrCat(sQuery, sizeof(sQuery), " `assists` INT(11) NOT NULL DEFAULT 0,");
-	StrCat(sQuery, sizeof(sQuery), " PRIMARY KEY (`steamid`))");
-	FormatEx(sQuery, sizeof(sQuery), sQuery);
-	if (!SQL_FastQuery(g_DB, sQuery))
-	{
-		SQL_GetError(g_DB, error, sizeof(error));
-		LogError("[SR] Cant create table. Error : %s", error);
-	}
-}
-
 public void SQL_InsertPlayerCallback(Database db, DBResultSet results, const char[] error, any data)
 {
 	// Checking for Enabled CVar, if false does not execute this function
@@ -205,11 +206,15 @@ public void SQL_InsertPlayerCallback(Database db, DBResultSet results, const cha
 	char sQueryStats[MAX_QUERY_LENGTH];
 	char sQueryUpdate[MAX_QUERY_LENGTH];
 	
-	FormatEx(sQueryStats, sizeof(sQueryStats), "SELECT kills, deaths, headshots, hits, shots, assists FROM `players` WHERE `steamid` = '%s';", sSteamID);
+	FormatEx(sQueryStats, sizeof(sQueryStats), 
+	"SELECT kills, deaths, headshots, hits, shots, assists, timeplayed FROM `players` WHERE `steamid` = '%s';", 
+	sSteamID);
 	
 	g_DB.Query(SQL_SelectPlayerCallback, sQueryStats, GetClientSerial(client), DBPrio_Normal);
 	
-	FormatEx(sQueryUpdate, sizeof(sQueryUpdate), "UPDATE `players` SET `lastconn`= CURRENT_TIMESTAMP() WHERE `steamid` = '%s';", sSteamID);
+	FormatEx(sQueryUpdate, sizeof(sQueryUpdate), 
+	"UPDATE `players` SET `lastconn`= CURRENT_TIMESTAMP() WHERE `steamid` = '%s';", 
+	sSteamID);
 	
 	g_DB.Query(SQL_UpdatePlayerLastConnectionCallback, sQueryUpdate, GetClientSerial(client), DBPrio_Normal);
 	
@@ -239,8 +244,24 @@ public void SQL_SelectPlayerCallback(Database db, DBResultSet results, const cha
 		g_iPlayerShots[client] = results.FetchInt(STAT_SHOTS);
 		g_iPlayerHits[client] = results.FetchInt(STAT_HITS);
 		g_iPlayerAssists[client] = results.FetchInt(STAT_ASSISTS);
+		g_iTimePlayed[client] = results.FetchInt(STAT_TIMEPLAYED);
 	}
 	
+}
+
+public void SQL_UpdatePlayerLastConnectionCallback(Database db, DBResultSet results, const char[] error, any data)
+{
+	// Checking for Enabled CVar, if false does not execute this function
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
+	if (results == null)
+	{
+		LogError("[SR] UpdatePlayerLastConnectionCallback cant use client data. Reason: %s", error);
+		return;
+	}
 }
 
 public void PlayerDeath_Callback(Event e, const char[] name, bool dontBroadcast)
@@ -304,7 +325,7 @@ void UpdatePlayer(int client)
 	
 	char sQuery[MAX_QUERY_LENGTH];
 	FormatEx(sQuery, sizeof(sQuery),
-	"UPDATE `players` SET `kills` = %d, `deaths` = %d, `headshots` = %d, `shots` = %d, `hits` = %d, `assists` = %d WHERE `steamid` = '%s'", 
+	"UPDATE `players` SET `kills` = %d, `deaths` = %d, `headshots` = %d, `shots` = %d, `hits` = %d, `assists` = %d WHERE `steamid` = '%s';",
 	g_iPlayerKills[client], 
 	g_iPlayerDeaths[client], 
 	g_iPlayerHeadshots[client], 
@@ -332,7 +353,34 @@ public void SQL_UpdatePlayerCallback(Database db, DBResultSet results, const cha
 	}
 }
 
-public void SQL_UpdatePlayerLastConnectionCallback(Database db, DBResultSet results, const char[] error, any data)
+void UpdatePlayerTimePlayed(int client)
+{
+	if (g_DB == null)
+	{
+		return;
+	}
+	
+	char sSteamID[MAX_STEAMID_LENGTH];
+	if(!GetClientAuthId(client, AuthId_Engine, sSteamID, MAX_STEAMID_LENGTH))
+	{
+		PrintToServer("SteamID: %s", sSteamID);
+		LogError("[SR] Couldn't fetch client SteamID");
+		return;
+	}
+	
+	g_iTimePlayed[client] = RoundToNearest(GetClientTime(client));
+	
+	char sQuery[MAX_QUERY_LENGTH];
+	FormatEx(sQuery, sizeof(sQuery),
+	"UPDATE `players` SET `timeplayed` = %d WHERE `steamid` = '%s';", 
+	g_iTimePlayed[client],
+	sSteamID);
+	
+	g_DB.Query(SQL_UpdatePlayerTimePlayedCallback, sQuery, GetClientSerial(client), DBPrio_Normal);
+	
+}
+
+public void SQL_UpdatePlayerTimePlayedCallback(Database db, DBResultSet results, const char[] error, any data)
 {
 	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
@@ -342,7 +390,7 @@ public void SQL_UpdatePlayerLastConnectionCallback(Database db, DBResultSet resu
 	
 	if (results == null)
 	{
-		LogError("[SR] UpdatePlayerLastConnectionCallback cant use client data. Reason: %s", error);
+		LogError("[SR] UpdatePlayerTimePlayedCallback cant use client data. Reason: %s", error);
 		return;
 	}
 }
@@ -436,4 +484,5 @@ public void OnClientDisconnect(int client)
 	}
 	
 	UpdatePlayer(client);
+	UpdatePlayerTimePlayed(client);
 }
