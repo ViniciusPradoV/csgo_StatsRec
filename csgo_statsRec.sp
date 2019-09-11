@@ -23,6 +23,9 @@
 
 #pragma newdecls required
 
+										/* TODO */
+/* Add column for timeplayed on DB and creating a menu to see player stats */
+
 EngineVersion g_Game;
 
 // DB //
@@ -80,6 +83,7 @@ public void OnPluginStart()
 
 public void OnClientPutInServer(int client)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
@@ -116,9 +120,6 @@ public void OnClientPutInServer(int client)
 		KickClient(client, "Verification problem, try again, please");
 		return;
 	}
-	
-	PrintToServer("OnClientPutInServer");
-	PrintToServer("SteamID: %s", sSteamID); // Just for debug purposes
 	
 	// Escaping name to fit DB
 	int iNameLength = ((strlen(sPlayerName) * 2) + 1);
@@ -159,7 +160,7 @@ void InitializeDB()
 	
 	char sQuery[MAX_QUERY_LENGTH];
 	PrintToServer("Before FormatEx");
-	// Concatening separately for better readability
+	// Concatenating separately for better readability
 	StrCat(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS `players`");
 	StrCat(sQuery, sizeof(sQuery), " (`steamid` VARCHAR(34) NOT NULL,");
 	StrCat(sQuery, sizeof(sQuery), " `name` VARCHAR(32),");
@@ -181,6 +182,7 @@ void InitializeDB()
 
 public void SQL_InsertPlayerCallback(Database db, DBResultSet results, const char[] error, any data)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
@@ -215,6 +217,7 @@ public void SQL_InsertPlayerCallback(Database db, DBResultSet results, const cha
 
 public void SQL_SelectPlayerCallback(Database db, DBResultSet results, const char[] error, any data)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
@@ -242,6 +245,7 @@ public void SQL_SelectPlayerCallback(Database db, DBResultSet results, const cha
 
 public void PlayerDeath_Callback(Event e, const char[] name, bool dontBroadcast)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
@@ -315,6 +319,7 @@ void UpdatePlayer(int client)
 
 public void SQL_UpdatePlayerCallback(Database db, DBResultSet results, const char[] error, any data)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
@@ -329,6 +334,7 @@ public void SQL_UpdatePlayerCallback(Database db, DBResultSet results, const cha
 
 public void SQL_UpdatePlayerLastConnectionCallback(Database db, DBResultSet results, const char[] error, any data)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
@@ -343,6 +349,7 @@ public void SQL_UpdatePlayerLastConnectionCallback(Database db, DBResultSet resu
 
 public void RoundEnd_Callback(Event e, const char[] name, bool dontBroadcast)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
@@ -365,6 +372,7 @@ public void RoundEnd_Callback(Event e, const char[] name, bool dontBroadcast)
 
 public void PlayerHurt_Callback(Event e, const char[] name, bool dontBroadcast)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
@@ -387,6 +395,7 @@ public void PlayerHurt_Callback(Event e, const char[] name, bool dontBroadcast)
 
 public void WeaponFire_Callback(Event e, const char[] name, bool dontBroadcast)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
@@ -400,7 +409,7 @@ public void WeaponFire_Callback(Event e, const char[] name, bool dontBroadcast)
 	// Getting values from event
 	int client = GetClientOfUserId(GetEventInt(e, "userid"));
 	
-	//Verifying if human and adding kill to attacker in the death event, verifying if headshot and incrementing HS counter accordingly
+	//Verifying if human and incrementing shots counter if true
 	if(!IsFakeClient(client))
 	{
 		g_iPlayerShots[client]++;
@@ -410,6 +419,7 @@ public void WeaponFire_Callback(Event e, const char[] name, bool dontBroadcast)
 
 public void OnClientDisconnect(int client)
 {
+	// Checking for Enabled CVar, if false does not execute this function
 	if(!g_cvPluginEnabled.BoolValue)
 	{
 		return;
