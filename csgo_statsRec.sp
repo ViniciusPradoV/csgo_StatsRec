@@ -10,8 +10,12 @@
 #define MAX_ERROR_LENGTH 255
 
 // Defining stats for usage on SELECT callbacks
-#define STAT_KILLS  0
-#define STAT_DEATHS 1
+#define STAT_KILLS  	0
+#define STAT_DEATHS 	1
+#define STAT_HEADSHOTS 	2
+#define STAT_SHOTS 		3
+#define STAT_HITS 		4
+#define STAT_ASSISTS 	5
 
 
 #include <sourcemod>
@@ -30,7 +34,8 @@ Database g_DB = null;
 int g_iPlayerKills[MAXPLAYERS + 1] = 0;
 int g_iPlayerDeaths[MAXPLAYERS + 1] = 0;
 int g_iPlayerHeadshots[MAXPLAYERS + 1] = 0;
-int g_iPlayerAccuracy[MAXPLAYERS + 1] = 0;
+int g_iPlayerShots[MAXPLAYERS + 1] = 0;
+int g_iPlayerHits[MAXPLAYERS + 1] = 0;
 int g_iPlayerAssists[MAXPLAYERS + 1] = 0;
 int g_iTimePlayed[MAXPLAYERS + 1] = 0;
 
@@ -65,8 +70,8 @@ public void OnPluginStart()
 	
 	HookEvent("player_death", PlayerDeath_Callback, EventHookMode_Post);
 	HookEvent("round_end", RoundEnd_Callback, EventHookMode_Post);
-	//HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_Post);
-	//HookEvent("weapon_fire", Event_WeaponFire, EventHookMode_Post);
+	HookEvent("player_hurt", PlayerHurt_Callback, EventHookMode_Post);
+	HookEvent("weapon_fire", WeaponFire_Callback, EventHookMode_Post);
 	
 	InitializeDB();	
 	
@@ -91,12 +96,12 @@ public void OnClientPutInServer(int client)
 		return;
 	}
 	
-	// Player stats
-	
+	// Player stats - Resetting //
 	g_iPlayerKills[client] = 0;
 	g_iPlayerDeaths[client] = 0;
 	g_iPlayerHeadshots[client] = 0;
-	g_iPlayerAccuracy[client] = 0;
+	g_iPlayerShots[client] = 0;
+	g_iPlayerHits[client] = 0;
 	g_iPlayerAssists[client] = 0;
 	g_iTimePlayed[client] = 0;
 	 
@@ -154,7 +159,19 @@ void InitializeDB()
 	
 	char sQuery[MAX_QUERY_LENGTH];
 	PrintToServer("Before FormatEx");
-	FormatEx(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS `players` (`steamid` VARCHAR(34) NOT NULL, `name` VARCHAR(32), `lastconn` VARCHAR(32) NOT NULL, `kills` INT(11) NOT NULL DEFAULT 0, `deaths` INT(11) NOT NULL DEFAULT 0, PRIMARY KEY (`steamid`))");
+	// Concatening separately for better readability
+	StrCat(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS `players`");
+	StrCat(sQuery, sizeof(sQuery), " (`steamid` VARCHAR(34) NOT NULL,");
+	StrCat(sQuery, sizeof(sQuery), " `name` VARCHAR(32),");
+	StrCat(sQuery, sizeof(sQuery), " `lastconn` VARCHAR(32) NOT NULL,");
+	StrCat(sQuery, sizeof(sQuery), " `kills` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `deaths` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `headshots` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `hits` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `shots` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " `assists` INT(11) NOT NULL DEFAULT 0,");
+	StrCat(sQuery, sizeof(sQuery), " PRIMARY KEY (`steamid`))");
+	FormatEx(sQuery, sizeof(sQuery), sQuery);
 	if (!SQL_FastQuery(g_DB, sQuery))
 	{
 		SQL_GetError(g_DB, error, sizeof(error));
@@ -186,7 +203,7 @@ public void SQL_InsertPlayerCallback(Database db, DBResultSet results, const cha
 	char sQueryStats[MAX_QUERY_LENGTH];
 	char sQueryUpdate[MAX_QUERY_LENGTH];
 	
-	FormatEx(sQueryStats, sizeof(sQueryStats), "SELECT kills, deaths FROM `players` WHERE `steamid` = '%s'", sSteamID);
+	FormatEx(sQueryStats, sizeof(sQueryStats), "SELECT kills, deaths, headshots, hits, shots, assists FROM `players` WHERE `steamid` = '%s';", sSteamID);
 	
 	g_DB.Query(SQL_SelectPlayerCallback, sQueryStats, GetClientSerial(client), DBPrio_Normal);
 	
@@ -215,6 +232,10 @@ public void SQL_SelectPlayerCallback(Database db, DBResultSet results, const cha
 	{
 		g_iPlayerKills[client] = results.FetchInt(STAT_KILLS);
 		g_iPlayerDeaths[client] = results.FetchInt(STAT_DEATHS);
+		g_iPlayerHeadshots[client] = results.FetchInt(STAT_HEADSHOTS);
+		g_iPlayerShots[client] = results.FetchInt(STAT_SHOTS);
+		g_iPlayerHits[client] = results.FetchInt(STAT_HITS);
+		g_iPlayerAssists[client] = results.FetchInt(STAT_ASSISTS);
 	}
 	
 }
@@ -234,14 +255,31 @@ public void PlayerDeath_Callback(Event e, const char[] name, bool dontBroadcast)
 	// Getting values from event
 	int client = GetClientOfUserId(GetEventInt(e, "userid"));
 	int attacker = GetClientOfUserId(GetEventInt(e, "attacker"));
+	int assister = GetClientOfUserId(GetEventInt(e, "assister"));
+	bool headshot = GetEventBool(e, "headshot");
 	
+	//Verifying if human and adding kill to attacker in the death event, verifying if headshot and incrementing HS counter accordingly
 	if(!IsFakeClient(attacker))
 	{
 		g_iPlayerKills[attacker]++;
+		
+		if(headshot)
+		{
+			g_iPlayerHeadshots[attacker]++;
+		}
 	}
+	
+	// Verifying if human and adding death to player killed in the death event
 	if(!IsFakeClient(client))
 	{
 		g_iPlayerDeaths[client]++;
+	}
+	
+	// Verifying if human/not the world and adding assist to assister in the death event
+	if(assister != 0)
+	{
+		if(!IsFakeClient(assister))
+			g_iPlayerAssists[assister]++;
 	}
 }
 
@@ -261,7 +299,15 @@ void UpdatePlayer(int client)
 	}
 	
 	char sQuery[MAX_QUERY_LENGTH];
-	FormatEx(sQuery, sizeof(sQuery), "UPDATE `players` SET `kills`= %d,`deaths`= %d WHERE `steamid` = '%s';", g_iPlayerKills[client], g_iPlayerDeaths[client], sSteamID);
+	FormatEx(sQuery, sizeof(sQuery),
+	"UPDATE `players` SET `kills` = %d, `deaths` = %d, `headshots` = %d, `shots` = %d, `hits` = %d, `assists` = %d WHERE `steamid` = '%s'", 
+	g_iPlayerKills[client], 
+	g_iPlayerDeaths[client], 
+	g_iPlayerHeadshots[client], 
+	g_iPlayerShots[client], 
+	g_iPlayerHits[client], 
+	g_iPlayerAssists[client], 
+	sSteamID);
 	
 	g_DB.Query(SQL_UpdatePlayerCallback, sQuery, GetClientSerial(client), DBPrio_Normal);
 	
@@ -314,6 +360,51 @@ public void RoundEnd_Callback(Event e, const char[] name, bool dontBroadcast)
 			if(!IsFakeClient(i))
 				UpdatePlayer(i);
 		}
+	}
+}
+
+public void PlayerHurt_Callback(Event e, const char[] name, bool dontBroadcast)
+{
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
+	if (g_DB == null)
+	{
+		return;
+	}
+	
+	// Getting values from event
+	int attacker = GetClientOfUserId(GetEventInt(e, "attacker"));
+	
+	if(attacker != 0)
+		if(!IsFakeClient(attacker))
+			g_iPlayerHits[attacker]++;
+
+
+}
+
+public void WeaponFire_Callback(Event e, const char[] name, bool dontBroadcast)
+{
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
+	if (g_DB == null)
+	{
+		return;
+	}
+	
+	// Getting values from event
+	int client = GetClientOfUserId(GetEventInt(e, "userid"));
+	
+	//Verifying if human and adding kill to attacker in the death event, verifying if headshot and incrementing HS counter accordingly
+	if(!IsFakeClient(client))
+	{
+		g_iPlayerShots[client]++;
+
 	}
 }
 
