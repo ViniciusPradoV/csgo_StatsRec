@@ -5,9 +5,12 @@
 #define PLUGIN_AUTHOR "Vinicius do Prado Vieira"
 #define PLUGIN_VERSION "0.01"
 
-#define MAX_STEAMID_LENGTH 34
-#define MAX_QUERY_LENGTH 512
-#define MAX_ERROR_LENGTH 255
+#define MAX_STEAMID_LENGTH	34
+#define MAX_QUERY_LENGTH	512
+#define MAX_ERROR_LENGTH	255
+#define MAX_TITLE_LENGTH	255
+#define MAX_STATS_LENGTH	255
+#define MAX_TIME_LENGTH		10
 
 // Defining stats for usage on SELECT callbacks
 #define STAT_KILLS  	0
@@ -23,9 +26,6 @@
 #include <sdktools>
 
 #pragma newdecls required
-
-															/* TODO */
-	/* Create a menu to see player stats, create a function to convert time on seconds on DB to HH:MM:SS for display on the menu*/
 
 EngineVersion g_Game;
 
@@ -68,6 +68,10 @@ public void OnPluginStart()
 	
 	CreateConVar("csgo_statsrec_version", PLUGIN_VERSION, "[CS:GO] StatsRec");
 	g_cvPluginEnabled = CreateConVar("csgo_statsrec_enabled", "1", "Controls if plugin is enabled");
+	
+	// Console Commands // 
+	
+	RegConsoleCmd("sm_mystats", Command_MyStats, "Displays a menu with the player statistics");
 	
 	
 	// Event Hooks //
@@ -129,6 +133,112 @@ void InitializeDB()
 	}
 }
 
+public Action Command_MyStats(int client, int args)
+{
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return Plugin_Stop;
+	}
+	
+	InitializeStatsMenu(client);
+	
+	return Plugin_Handled;
+}
+
+void InitializeStatsMenu(int client)
+{
+	Menu mStatsMenu = new Menu(StatsMenuHandler, MENU_ACTIONS_DEFAULT);
+	
+	// Getting player name
+	char sPlayerName[MAX_NAME_LENGTH]; 
+	GetClientName(client, sPlayerName, sizeof(sPlayerName));
+	
+	// Setting menu title
+	char menuTitle[MAX_TITLE_LENGTH];
+	FormatEx(menuTitle, sizeof(menuTitle), "Stats for player: %s", sPlayerName);
+	mStatsMenu.SetTitle(menuTitle);
+	
+	
+	// Kills
+	char sPlayerKills[MAX_STATS_LENGTH]; 
+	FormatEx(sPlayerKills, sizeof(sPlayerKills), "Kills: %d", g_iPlayerKills[client]);
+	
+	// Deaths
+	char sPlayerDeaths[MAX_STATS_LENGTH];
+	FormatEx(sPlayerDeaths, sizeof(sPlayerDeaths), "Deaths: %d", g_iPlayerDeaths[client]);
+	
+	// Headshot percentage
+	char sPlayerHeadshots[MAX_STATS_LENGTH];
+	int iHeadShotPercentage;
+	if(g_iPlayerKills[client] == 0) // Checking for divisions by zero
+	{
+		iHeadShotPercentage = 0;
+	}
+	else
+	{
+		iHeadShotPercentage = RoundToNearest((g_iPlayerHeadshots[client]/ float(g_iPlayerKills[client]))*100);
+	}
+	FormatEx(sPlayerHeadshots, sizeof(sPlayerDeaths), "Headshot kills percentage: %d%", iHeadShotPercentage);
+	
+	// Accuracy
+	char sPlayerAccuracy[MAX_STATS_LENGTH]; 
+	int iPlayerAccuracyPercentage;
+	if(g_iPlayerShots[client] == 0) // Checking for divisions by zero
+	{
+		iPlayerAccuracyPercentage = 0;
+	}
+	else
+	{
+		iPlayerAccuracyPercentage = RoundToNearest((g_iPlayerHits[client]/float(g_iPlayerShots[client]))*100);
+	}
+	FormatEx(sPlayerAccuracy, sizeof(sPlayerAccuracy), "Accuracy: %d%", iPlayerAccuracyPercentage);
+	
+	// Assist
+	char sPlayerAssists[MAX_STATS_LENGTH]; 
+	FormatEx(sPlayerAssists, sizeof(sPlayerAssists), "Assists: %d", g_iPlayerAssists[client]);
+	
+	// Converting and storing time played on HHHH:MM:SS format
+	char sTime[MAX_TIME_LENGTH];
+	SecondsToHoursMinutesSeconds(client, sTime);
+	// Arranging item on array to display on menu
+	char sTimePlayed[MAX_STATS_LENGTH];
+	FormatEx(sTimePlayed, sizeof(sTimePlayed), "Total time played on server: %s", sTime);
+	
+	
+	// Adding items to statistics menu
+	mStatsMenu.AddItem("", sPlayerKills, ITEMDRAW_DISABLED);
+	mStatsMenu.AddItem("", sPlayerDeaths, ITEMDRAW_DISABLED);
+	mStatsMenu.AddItem("", sPlayerHeadshots, ITEMDRAW_DISABLED);
+	mStatsMenu.AddItem("", sPlayerAccuracy, ITEMDRAW_DISABLED);
+	mStatsMenu.AddItem("", sPlayerAssists, ITEMDRAW_DISABLED);
+	mStatsMenu.AddItem("", sTimePlayed, ITEMDRAW_DISABLED);
+	
+	mStatsMenu.ExitButton = true;
+	
+	mStatsMenu.Display(client, MENU_TIME_FOREVER);
+
+}
+
+public int StatsMenuHandler (Menu menu, MenuAction action, int param1, int param2)
+{
+	if(action == MenuAction_End)
+	{
+		delete menu;
+	}
+}
+
+stock void SecondsToHoursMinutesSeconds(int client, char sTime[MAX_TIME_LENGTH])
+{
+	// Time recorded on DB + time from current session
+	int iTimePlayedInSeconds = g_iTimePlayed[client] + RoundToNearest(GetClientTime(client)); 
+	
+	int iHours = RoundToFloor(float(iTimePlayedInSeconds / 3600));
+	int iMinutes = RoundToFloor(float((iTimePlayedInSeconds % 3600) / 60));
+	int iSeconds = (iTimePlayedInSeconds % 3600) % 60;
+	
+	FormatEx(sTime, sizeof(sTime), "%d:%d:%d", iHours, iMinutes, iSeconds);
+}
+
 public void OnClientPutInServer(int client)
 {
 	// Checking for Enabled CVar, if false does not execute this function
@@ -176,7 +286,11 @@ public void OnClientPutInServer(int client)
 	
 	
 	char sQuery[MAX_QUERY_LENGTH];
-	FormatEx(sQuery, MAX_QUERY_LENGTH, "INSERT INTO `players` (`steamid`, `name`, `lastconn`) VALUES ('%s', '%s', CURRENT_TIMESTAMP()) ON DUPLICATE KEY UPDATE `name` = '%s', `lastconn` = CURRENT_TIMESTAMP();", sSteamID, sEscapedName, sEscapedName);
+	FormatEx(sQuery, MAX_QUERY_LENGTH, 
+	"INSERT INTO `players` (`steamid`, `name`, `lastconn`) VALUES ('%s', '%s', CURRENT_TIMESTAMP()) ON DUPLICATE KEY UPDATE `name` = '%s', `lastconn` = CURRENT_TIMESTAMP();", 
+	sSteamID, 
+	sEscapedName, 
+	sEscapedName);
 	// Inserting player on DB 
 	g_DB.Query(SQL_InsertPlayerCallback, sQuery, GetClientSerial(client), DBPrio_Normal); 
 }
@@ -264,50 +378,6 @@ public void SQL_UpdatePlayerLastConnectionCallback(Database db, DBResultSet resu
 	}
 }
 
-public void PlayerDeath_Callback(Event e, const char[] name, bool dontBroadcast)
-{
-	// Checking for Enabled CVar, if false does not execute this function
-	if(!g_cvPluginEnabled.BoolValue)
-	{
-		return;
-	}
-	
-	if (g_DB == null)
-	{
-		return;
-	}
-	
-	// Getting values from event
-	int client = GetClientOfUserId(GetEventInt(e, "userid"));
-	int attacker = GetClientOfUserId(GetEventInt(e, "attacker"));
-	int assister = GetClientOfUserId(GetEventInt(e, "assister"));
-	bool headshot = GetEventBool(e, "headshot");
-	
-	//Verifying if human and adding kill to attacker in the death event, verifying if headshot and incrementing HS counter accordingly
-	if(!IsFakeClient(attacker))
-	{
-		g_iPlayerKills[attacker]++;
-		
-		if(headshot)
-		{
-			g_iPlayerHeadshots[attacker]++;
-		}
-	}
-	
-	// Verifying if human and adding death to player killed in the death event
-	if(!IsFakeClient(client))
-	{
-		g_iPlayerDeaths[client]++;
-	}
-	
-	// Verifying if human/not the world and adding assist to assister in the death event
-	if(assister != 0)
-	{
-		if(!IsFakeClient(assister))
-			g_iPlayerAssists[assister]++;
-	}
-}
-
 void UpdatePlayer(int client)
 {
 	if (g_DB == null)
@@ -368,7 +438,7 @@ void UpdatePlayerTimePlayed(int client)
 		return;
 	}
 	
-	g_iTimePlayed[client] = RoundToNearest(GetClientTime(client));
+	g_iTimePlayed[client] = g_iTimePlayed[client] + RoundToNearest(GetClientTime(client));
 	
 	char sQuery[MAX_QUERY_LENGTH];
 	FormatEx(sQuery, sizeof(sQuery),
@@ -392,6 +462,50 @@ public void SQL_UpdatePlayerTimePlayedCallback(Database db, DBResultSet results,
 	{
 		LogError("[SR] UpdatePlayerTimePlayedCallback cant use client data. Reason: %s", error);
 		return;
+	}
+}
+
+public void PlayerDeath_Callback(Event e, const char[] name, bool dontBroadcast)
+{
+	// Checking for Enabled CVar, if false does not execute this function
+	if(!g_cvPluginEnabled.BoolValue)
+	{
+		return;
+	}
+	
+	if (g_DB == null)
+	{
+		return;
+	}
+	
+	// Getting values from event
+	int client = GetClientOfUserId(GetEventInt(e, "userid"));
+	int attacker = GetClientOfUserId(GetEventInt(e, "attacker"));
+	int assister = GetClientOfUserId(GetEventInt(e, "assister"));
+	bool headshot = GetEventBool(e, "headshot");
+	
+	//Verifying if human and adding kill to attacker in the death event, verifying if headshot and incrementing HS counter accordingly
+	if(!IsFakeClient(attacker))
+	{
+		g_iPlayerKills[attacker]++;
+		
+		if(headshot)
+		{
+			g_iPlayerHeadshots[attacker]++;
+		}
+	}
+	
+	// Verifying if human and adding death to player killed in the death event
+	if(!IsFakeClient(client))
+	{
+		g_iPlayerDeaths[client]++;
+	}
+	
+	// Verifying if human/not the world and adding assist to assister in the death event
+	if(assister != 0)
+	{
+		if(!IsFakeClient(assister))
+			g_iPlayerAssists[assister]++;
 	}
 }
 
