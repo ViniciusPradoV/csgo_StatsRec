@@ -4,22 +4,39 @@ A statistics recording plugin for CS:GO servers
 This plugin records statistics for players on CS:GO servers and displays it on a menu
 
 
-Installation:
+# Installation:
 
-You need to use MySQL for that plugin to work. Copy and paste this on your "databases.cfg" file, 
-it should be located on "server/csgo/addons/sourcemod/configs/databases.cfg
+1. *Only works on MySQL*. Copy and paste this on your "databases.cfg" file, 
+it should be located on "server/csgo/addons/sourcemod/configs/databases.cfg"
 
+```
 "Databases"
 {
-  "statsrec"
-  {
-    "driver"    "mysql"
-    "host"      "localhost"
-    "database"  "statsrec"
-    "user"      ""
-    "pass"      ""
-  }
+	"statsrec"
+	{
+		"driver"         "mysql"
+		"host"           "localhost"
+		"database"       "statsrec"
+		"user"           "root"
+		"pass"           ""
+	}
 }
+```
 
-Compile the .sp file using SPEdit (https://github.com/JulienKluge/Spedit/releases/download/1.2.0.3/speditInstaller1.2.0.3.exe).
-Put the .smx file on your "plugins" server folder. It should be located on: "server/csgo/addons/sourcemod/plugins".
+2. Compile the .sp file using SPEdit (https://github.com/JulienKluge/Spedit).
+3. Put the generated .smx file on your "plugins" server folder. It should be located on: "server/csgo/addons/sourcemod/plugins".
+
+# CVars - Console Variables
+
+### csgo_statsrec_enabled
+
+ Controls if plugin is enabled - Set "1" to enable and "0" to disable
+ 
+ 
+# Console Commands
+
+### sm_mystats
+
+Displays a menu with player stats, as seen in the image below
+
+![csgo_statsRec_menu](https://i.imgur.com/1Qj52IJ.jpg)
