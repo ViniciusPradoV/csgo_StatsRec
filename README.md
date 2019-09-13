@@ -6,7 +6,7 @@ This plugin records statistics for players on CS:GO servers and displays it on a
 
 # Installation:
 
-1. *Only works on MySQL*. Copy and paste this on your "databases.cfg" file, 
+1. *Only works on MySQL*. Add this database entry to your "databases.cfg" file, 
 it should be located on "server/csgo/addons/sourcemod/configs/databases.cfg"
 
 ```
